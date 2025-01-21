@@ -36,6 +36,15 @@ const (
 )
 
 type logsExporter struct {
+	params                    exporter.Settings
+	cfg                       *Config
+	ctx                       context.Context // ctx triggers shutdown upon cancellation
+	scrubber                  scrub.Scrubber  // scrubber scrubs sensitive information from error messages
+	translator                *logsmapping.Translator
+	sender                    *logs.Sender
+	onceMetadata              *sync.Once
+	sourceProvider            source.Provider
+	metadataReporter          *inframetadata.Reporter
 	hostFromAttributesHandler attributes.HostFromAttributesHandler
 }
 
@@ -77,6 +86,15 @@ func newLogsExporter(
 	s := logs.NewSender(cfg.Logs.TCPAddrConfig.Endpoint, params.Logger, cfg.ClientConfig, cfg.Logs.DumpPayloads, string(cfg.API.Key))
 
 	return &logsExporter{
+		params:                    params,
+		cfg:                       cfg,
+		ctx:                       ctx,
+		translator:                translator,
+		sender:                    s,
+		onceMetadata:              onceMetadata,
+		scrubber:                  scrub.NewScrubber(),
+		sourceProvider:            sourceProvider,
+		metadataReporter:          metadataReporter,
 		hostFromAttributesHandler: hostFromAttributesHandler,
 	}, nil
 }

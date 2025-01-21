@@ -79,8 +79,8 @@ func enableZorkianMetricExport() error {
 	return featuregate.GlobalRegistry().Set(metricExportNativeClientFeatureGate.ID(), false)
 }
 
-func consumeResource(metadataReporter *inframetadata.Reporter, res pcommon.Resource, logger *zap.Logger) {
-	if err := metadataReporter.ConsumeResource(res); err != nil {
+func consumeResource(metadataReporter *inframetadata.Reporter, res pcommon.Resource, logger *zap.Logger, hostFromAttributesHandler attributes.HostFromAttributesHandler) {
+	if err := metadataReporter.ConsumeResource(res, hostFromAttributesHandler); err != nil {
 		logger.Warn("failed to consume resource for host metadata", zap.Error(err), zap.Any("resource", res))
 	}
 }
@@ -102,6 +102,8 @@ type factory struct {
 	attributesErr            error
 
 	registry *featuregate.Registry
+
+	gatewayUsage *attributes.GatewayUsage
 }
 
 func (f *factory) SourceProvider(set component.TelemetrySettings, configHostname string, timeout time.Duration) (source.Provider, error) {
@@ -147,7 +149,7 @@ func (f *factory) StopReporter() {
 }
 
 func (f *factory) TraceAgent(ctx context.Context, wg *sync.WaitGroup, params exporter.Settings, cfg *Config, sourceProvider source.Provider, attrsTranslator *attributes.Translator) (*agent.Agent, error) {
-	agnt, err := newTraceAgent(ctx, params, cfg, sourceProvider, metricsclient.InitializeMetricClient(params.MeterProvider, metricsclient.ExporterSourceTag), attrsTranslator)
+	agnt, err := newTraceAgent(ctx, params, cfg, sourceProvider, metricsclient.InitializeMetricClient(params.MeterProvider, metricsclient.ExporterSourceTag), attrsTranslator, f.gatewayUsage)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +162,7 @@ func (f *factory) TraceAgent(ctx context.Context, wg *sync.WaitGroup, params exp
 }
 
 func newFactoryWithRegistry(registry *featuregate.Registry) exporter.Factory {
-	f := &factory{registry: registry}
+	f := &factory{registry: registry, gatewayUsage: attributes.NewGatewayUsage()}
 	return exporter.NewFactory(
 		metadata.Type,
 		f.createDefaultConfig,
@@ -288,18 +290,18 @@ func (f *factory) createMetricsExporter(
 				if md.ResourceMetrics().Len() > 0 {
 					attrs = md.ResourceMetrics().At(0).Resource().Attributes()
 				}
-				go hostmetadata.RunPusher(ctx, set, pcfg, hostProvider, attrs, metadataReporter)
+				go hostmetadata.RunPusher(ctx, set, pcfg, hostProvider, attrs, metadataReporter, f.gatewayUsage)
 			})
 
 			// Consume resources for host metadata
 			for i := 0; i < md.ResourceMetrics().Len(); i++ {
 				res := md.ResourceMetrics().At(i).Resource()
-				consumeResource(metadataReporter, res, set.Logger)
+				consumeResource(metadataReporter, res, set.Logger, f.gatewayUsage)
 			}
 			return nil
 		}
 	} else {
-		exp, metricsErr := newMetricsExporter(ctx, set, cfg, acfg, &f.onceMetadata, attrsTranslator, hostProvider, metadataReporter, statsIn)
+		exp, metricsErr := newMetricsExporter(ctx, set, cfg, acfg, &f.onceMetadata, attrsTranslator, hostProvider, metadataReporter, statsIn, f.gatewayUsage)
 		if metricsErr != nil {
 			cancel()  // first cancel context
 			wg.Wait() // then wait for shutdown
@@ -397,12 +399,12 @@ func (f *factory) createTracesExporter(
 				if td.ResourceSpans().Len() > 0 {
 					attrs = td.ResourceSpans().At(0).Resource().Attributes()
 				}
-				go hostmetadata.RunPusher(ctx, set, pcfg, hostProvider, attrs, metadataReporter)
+				go hostmetadata.RunPusher(ctx, set, pcfg, hostProvider, attrs, metadataReporter, f.gatewayUsage)
 			})
 			// Consume resources for host metadata
 			for i := 0; i < td.ResourceSpans().Len(); i++ {
 				res := td.ResourceSpans().At(i).Resource()
-				consumeResource(metadataReporter, res, set.Logger)
+				consumeResource(metadataReporter, res, set.Logger, f.gatewayUsage)
 			}
 			return nil
 		}
@@ -412,7 +414,7 @@ func (f *factory) createTracesExporter(
 			return nil
 		}
 	} else {
-		tracex, err2 := newTracesExporter(ctx, set, cfg, &f.onceMetadata, hostProvider, traceagent, metadataReporter)
+		tracex, err2 := newTracesExporter(ctx, set, cfg, &f.onceMetadata, hostProvider, traceagent, metadataReporter, f.gatewayUsage)
 		if err2 != nil {
 			cancel()
 			wg.Wait() // then wait for shutdown
@@ -493,16 +495,16 @@ func (f *factory) createLogsExporter(
 		pusher = func(_ context.Context, td plog.Logs) error {
 			f.onceMetadata.Do(func() {
 				attrs := pcommon.NewMap()
-				go hostmetadata.RunPusher(ctx, set, pcfg, hostProvider, attrs, metadataReporter)
+				go hostmetadata.RunPusher(ctx, set, pcfg, hostProvider, attrs, metadataReporter, f.gatewayUsage)
 			})
 			for i := 0; i < td.ResourceLogs().Len(); i++ {
 				res := td.ResourceLogs().At(i).Resource()
-				consumeResource(metadataReporter, res, set.Logger)
+				consumeResource(metadataReporter, res, set.Logger, f.gatewayUsage)
 			}
 			return nil
 		}
 	case isLogsAgentExporterEnabled():
-		la, exp, err := newLogsAgentExporter(ctx, set, cfg, hostProvider)
+		la, exp, err := newLogsAgentExporter(ctx, set, cfg, hostProvider, f.gatewayUsage)
 		if err != nil {
 			cancel()
 			return nil, err
@@ -510,7 +512,7 @@ func (f *factory) createLogsExporter(
 		logsAgent = la
 		pusher = exp.ConsumeLogs
 	default:
-		exp, err := newLogsExporter(ctx, set, cfg, &f.onceMetadata, attributesTranslator, hostProvider, metadataReporter)
+		exp, err := newLogsExporter(ctx, set, cfg, &f.onceMetadata, attributesTranslator, hostProvider, metadataReporter, f.gatewayUsage)
 		if err != nil {
 			cancel()
 			return nil, err

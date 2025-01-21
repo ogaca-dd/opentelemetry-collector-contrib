@@ -45,15 +45,16 @@ var traceCustomHTTPFeatureGate = featuregate.GlobalRegistry().MustRegister(
 type traceExporter struct {
 	params           exporter.Settings
 	cfg              *Config
-	ctx              context.Context         // ctx triggers shutdown upon cancellation
-	client           *zorkian.Client         // client sends running metrics to backend & performs API validation
-	metricsAPI       *datadogV2.MetricsApi   // client sends running metrics to backend
-	scrubber         scrub.Scrubber          // scrubber scrubs sensitive information from error messages
-	onceMetadata     *sync.Once              // onceMetadata ensures that metadata is sent only once across all exporters
-	agent            *agent.Agent            // agent processes incoming traces
-	sourceProvider   source.Provider         // is able to source the origin of a trace (hostname, container, etc)
-	metadataReporter *inframetadata.Reporter // reports host metadata from resource attributes and metrics
-	retrier          *clientutil.Retrier     // retrier handles retries on requests
+	ctx              context.Context          // ctx triggers shutdown upon cancellation
+	client           *zorkian.Client          // client sends running metrics to backend & performs API validation
+	metricsAPI       *datadogV2.MetricsApi    // client sends running metrics to backend
+	scrubber         scrub.Scrubber           // scrubber scrubs sensitive information from error messages
+	onceMetadata     *sync.Once               // onceMetadata ensures that metadata is sent only once across all exporters
+	agent            *agent.Agent             // agent processes incoming traces
+	sourceProvider   source.Provider          // is able to source the origin of a trace (hostname, container, etc)
+	metadataReporter *inframetadata.Reporter  // reports host metadata from resource attributes and metrics
+	retrier          *clientutil.Retrier      // retrier handles retries on requests
+	gatewayUsage     *attributes.GatewayUsage // gatewayUsage stores the gateway usage metrics
 }
 
 func newTracesExporter(
@@ -64,6 +65,7 @@ func newTracesExporter(
 	sourceProvider source.Provider,
 	agent *agent.Agent,
 	metadataReporter *inframetadata.Reporter,
+	gatewayUsage *attributes.GatewayUsage,
 ) (*traceExporter, error) {
 	scrubber := scrub.NewScrubber()
 	exp := &traceExporter{
@@ -76,6 +78,7 @@ func newTracesExporter(
 		sourceProvider:   sourceProvider,
 		retrier:          clientutil.NewRetrier(params.Logger, cfg.BackOffConfig, scrubber),
 		metadataReporter: metadataReporter,
+		gatewayUsage:     gatewayUsage,
 	}
 	// client to send running metric to the backend & perform API key validation
 	errchan := make(chan error)
@@ -118,13 +121,13 @@ func (exp *traceExporter) consumeTraces(
 			if td.ResourceSpans().Len() > 0 {
 				attrs = td.ResourceSpans().At(0).Resource().Attributes()
 			}
-			go hostmetadata.RunPusher(exp.ctx, exp.params, newMetadataConfigfromConfig(exp.cfg), exp.sourceProvider, attrs, exp.metadataReporter)
+			go hostmetadata.RunPusher(exp.ctx, exp.params, newMetadataConfigfromConfig(exp.cfg), exp.sourceProvider, attrs, exp.metadataReporter, exp.gatewayUsage)
 		})
 
 		// Consume resources for host metadata
 		for i := 0; i < td.ResourceSpans().Len(); i++ {
 			res := td.ResourceSpans().At(i).Resource()
-			consumeResource(exp.metadataReporter, res, exp.params.Logger)
+			consumeResource(exp.metadataReporter, res, exp.params.Logger, exp.gatewayUsage)
 		}
 	}
 	rspans := td.ResourceSpans()
@@ -156,11 +159,13 @@ func (exp *traceExporter) exportUsageMetrics(ctx context.Context, hosts map[stri
 	var err error
 	if isMetricExportV2Enabled() {
 		series := make([]datadogV2.MetricSeries, 0, len(hosts)+len(tags))
+		timestamp := uint64(now)
 		for host := range hosts {
-			series = append(series, metrics.DefaultMetrics("traces", host, uint64(now), buildTags)...)
+			series = append(series, metrics.DefaultMetrics("traces", host, timestamp, buildTags)...)
+			series = append(series, metrics.GatewayUsageGauge(timestamp, host, buildTags, exp.gatewayUsage))
 		}
 		for tag := range tags {
-			ms := metrics.DefaultMetrics("traces", "", uint64(now), buildTags)
+			ms := metrics.DefaultMetrics("traces", "", timestamp, buildTags)
 			for i := range ms {
 				ms[i].Tags = append(ms[i].Tags, tag)
 			}
@@ -192,12 +197,12 @@ func (exp *traceExporter) exportUsageMetrics(ctx context.Context, hosts map[stri
 	}
 }
 
-func newTraceAgent(ctx context.Context, params exporter.Settings, cfg *Config, sourceProvider source.Provider, metricsClient statsd.ClientInterface, attrsTranslator *attributes.Translator) (*agent.Agent, error) {
+func newTraceAgent(ctx context.Context, params exporter.Settings, cfg *Config, sourceProvider source.Provider, metricsClient statsd.ClientInterface, attrsTranslator *attributes.Translator, hostFromAttributesHandler attributes.HostFromAttributesHandler) (*agent.Agent, error) {
 	acfg, err := newTraceAgentConfig(ctx, params, cfg, sourceProvider, attrsTranslator)
 	if err != nil {
 		return nil, err
 	}
-	return agent.NewAgent(ctx, acfg, telemetry.NewNoopCollector(), metricsClient, gzip.NewComponent()), nil
+	return agent.NewAgent(ctx, acfg, telemetry.NewNoopCollector(), metricsClient, gzip.NewComponent(), hostFromAttributesHandler), nil
 }
 
 func newTraceAgentConfig(ctx context.Context, params exporter.Settings, cfg *Config, sourceProvider source.Provider, attrsTranslator *attributes.Translator) (*traceconfig.AgentConfig, error) {

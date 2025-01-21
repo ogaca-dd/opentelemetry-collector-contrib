@@ -36,15 +36,7 @@ const (
 )
 
 type logsExporter struct {
-	params           exporter.Settings
-	cfg              *Config
-	ctx              context.Context // ctx triggers shutdown upon cancellation
-	scrubber         scrub.Scrubber  // scrubber scrubs sensitive information from error messages
-	translator       *logsmapping.Translator
-	sender           *logs.Sender
-	onceMetadata     *sync.Once
-	sourceProvider   source.Provider
-	metadataReporter *inframetadata.Reporter
+	hostFromAttributesHandler attributes.HostFromAttributesHandler
 }
 
 // newLogsExporter creates a new instance of logsExporter
@@ -56,6 +48,7 @@ func newLogsExporter(
 	attributesTranslator *attributes.Translator,
 	sourceProvider source.Provider,
 	metadataReporter *inframetadata.Reporter,
+	hostFromAttributesHandler attributes.HostFromAttributesHandler,
 ) (*logsExporter, error) {
 	// create Datadog client
 	// validation endpoint is provided by Metrics
@@ -84,15 +77,7 @@ func newLogsExporter(
 	s := logs.NewSender(cfg.Logs.TCPAddrConfig.Endpoint, params.Logger, cfg.ClientConfig, cfg.Logs.DumpPayloads, string(cfg.API.Key))
 
 	return &logsExporter{
-		params:           params,
-		cfg:              cfg,
-		ctx:              ctx,
-		translator:       translator,
-		sender:           s,
-		onceMetadata:     onceMetadata,
-		scrubber:         scrub.NewScrubber(),
-		sourceProvider:   sourceProvider,
-		metadataReporter: metadataReporter,
+		hostFromAttributesHandler: hostFromAttributesHandler,
 	}, nil
 }
 
@@ -109,17 +94,17 @@ func (exp *logsExporter) consumeLogs(ctx context.Context, ld plog.Logs) (err err
 			if ld.ResourceLogs().Len() > 0 {
 				attrs = ld.ResourceLogs().At(0).Resource().Attributes()
 			}
-			go hostmetadata.RunPusher(exp.ctx, exp.params, newMetadataConfigfromConfig(exp.cfg), exp.sourceProvider, attrs, exp.metadataReporter)
+			go hostmetadata.RunPusher(exp.ctx, exp.params, newMetadataConfigfromConfig(exp.cfg), exp.sourceProvider, attrs, exp.metadataReporter, exp.hostFromAttributesHandler)
 		})
 
 		// Consume resources for host metadata
 		for i := 0; i < ld.ResourceLogs().Len(); i++ {
 			res := ld.ResourceLogs().At(i).Resource()
-			consumeResource(exp.metadataReporter, res, exp.params.Logger)
+			consumeResource(exp.metadataReporter, res, exp.params.Logger, exp.hostFromAttributesHandler)
 		}
 	}
 
-	payloads := exp.translator.MapLogs(ctx, ld)
+	payloads := exp.translator.MapLogs(ctx, ld, exp.hostFromAttributesHandler)
 	return exp.sender.SubmitLogs(exp.ctx, payloads)
 }
 
@@ -129,6 +114,7 @@ func newLogsAgentExporter(
 	params exporter.Settings,
 	cfg *Config,
 	sourceProvider source.Provider,
+	hostFromAttributesHandler attributes.HostFromAttributesHandler,
 ) (logsagentpipeline.LogsAgent, *logsagentexporter.Exporter, error) {
 	logComponent := newLogComponent(params.TelemetrySettings)
 	cfgComponent := newConfigComponent(params.TelemetrySettings, cfg)
@@ -154,7 +140,7 @@ func newLogsAgentExporter(
 		return nil, &logsagentexporter.Exporter{}, fmt.Errorf("failed to create attribute translator: %w", err)
 	}
 
-	logsAgentExporter, err := logsagentexporter.NewExporter(params.TelemetrySettings, logsAgentConfig, logSource, pipelineChan, attributesTranslator)
+	logsAgentExporter, err := logsagentexporter.NewExporter(params.TelemetrySettings, logsAgentConfig, logSource, pipelineChan, attributesTranslator, hostFromAttributesHandler)
 	if err != nil {
 		return nil, &logsagentexporter.Exporter{}, fmt.Errorf("failed to create logs agent exporter: %w", err)
 	}

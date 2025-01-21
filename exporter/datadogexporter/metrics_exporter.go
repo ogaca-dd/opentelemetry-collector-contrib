@@ -61,6 +61,8 @@ type metricsExporter struct {
 	// getPushTime returns a Unix time in nanoseconds, representing the time pushing metrics.
 	// It will be overwritten in tests.
 	getPushTime func() uint64
+
+	gatewayUsage *attributes.GatewayUsage
 }
 
 func newMetricsExporter(
@@ -73,6 +75,7 @@ func newMetricsExporter(
 	sourceProvider source.Provider,
 	metadataReporter *inframetadata.Reporter,
 	statsOut chan []byte,
+	gatewayUsage *attributes.GatewayUsage,
 ) (*metricsExporter, error) {
 	options := cfg.Metrics.ToTranslatorOpts()
 	options = append(options, otlpmetrics.WithFallbackSourceProvider(sourceProvider))
@@ -101,6 +104,7 @@ func newMetricsExporter(
 		sourceProvider:   sourceProvider,
 		getPushTime:      func() uint64 { return uint64(time.Now().UTC().UnixNano()) },
 		metadataReporter: metadataReporter,
+		gatewayUsage:     gatewayUsage,
 	}
 	errchan := make(chan error)
 	if isMetricExportV2Enabled() {
@@ -181,22 +185,22 @@ func (exp *metricsExporter) PushMetricsData(ctx context.Context, md pmetric.Metr
 			if md.ResourceMetrics().Len() > 0 {
 				attrs = md.ResourceMetrics().At(0).Resource().Attributes()
 			}
-			go hostmetadata.RunPusher(exp.ctx, exp.params, newMetadataConfigfromConfig(exp.cfg), exp.sourceProvider, attrs, exp.metadataReporter)
+			go hostmetadata.RunPusher(exp.ctx, exp.params, newMetadataConfigfromConfig(exp.cfg), exp.sourceProvider, attrs, exp.metadataReporter, exp.gatewayUsage)
 		})
 
 		// Consume resources for host metadata
 		for i := 0; i < md.ResourceMetrics().Len(); i++ {
 			res := md.ResourceMetrics().At(i).Resource()
-			consumeResource(exp.metadataReporter, res, exp.params.Logger)
+			consumeResource(exp.metadataReporter, res, exp.params.Logger, exp.gatewayUsage)
 		}
 	}
 	var consumer otlpmetrics.Consumer
 	if isMetricExportV2Enabled() {
-		consumer = metrics.NewConsumer()
+		consumer = metrics.NewConsumer(exp.gatewayUsage)
 	} else {
 		consumer = metrics.NewZorkianConsumer()
 	}
-	metadata, err := exp.tr.MapMetrics(ctx, md, consumer)
+	metadata, err := exp.tr.MapMetrics(ctx, md, consumer, exp.gatewayUsage)
 	if err != nil {
 		return fmt.Errorf("failed to map metrics: %w", err)
 	}

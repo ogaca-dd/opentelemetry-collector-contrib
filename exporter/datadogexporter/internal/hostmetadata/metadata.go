@@ -34,10 +34,10 @@ import (
 
 // metadataFromAttributes gets metadata info from attributes following
 // OpenTelemetry semantic conventions
-func metadataFromAttributes(attrs pcommon.Map) payload.HostMetadata {
+func metadataFromAttributes(attrs pcommon.Map, hostFromAttributesHandler attributes.HostFromAttributesHandler) payload.HostMetadata {
 	hm := payload.HostMetadata{Meta: &payload.Meta{}, Tags: &payload.HostTags{}}
 
-	if src, ok := attributes.SourceFromAttrs(attrs); ok && src.Kind == source.HostnameKind {
+	if src, ok := attributes.SourceFromAttrs(attrs, hostFromAttributesHandler); ok && src.Kind == source.HostnameKind {
 		hm.InternalHostname = src.Identifier
 		hm.Meta.Hostname = src.Identifier
 	}
@@ -169,7 +169,7 @@ func NewPusher(params exporter.Settings, pcfg PusherConfig) inframetadata.Pusher
 
 // RunPusher to push host metadata payloads from the host where the Collector is running periodically to Datadog intake.
 // This function is blocking and it is meant to be run on a goroutine.
-func RunPusher(ctx context.Context, params exporter.Settings, pcfg PusherConfig, p source.Provider, attrs pcommon.Map, reporter *inframetadata.Reporter) {
+func RunPusher(ctx context.Context, params exporter.Settings, pcfg PusherConfig, p source.Provider, attrs pcommon.Map, reporter *inframetadata.Reporter, hostFromAttributesHandler attributes.HostFromAttributesHandler) {
 	// Push metadata every 30 minutes
 	ticker := time.NewTicker(30 * time.Minute)
 	defer ticker.Stop()
@@ -184,7 +184,7 @@ func RunPusher(ctx context.Context, params exporter.Settings, pcfg PusherConfig,
 	// *must* be deep copied before calling `fillHostMetadata`.
 	hostMetadata := payload.NewEmpty()
 	if pcfg.UseResourceMetadata {
-		hostMetadata = metadataFromAttributes(attrs)
+		hostMetadata = metadataFromAttributes(attrs, hostFromAttributesHandler)
 	}
 	fillHostMetadata(params, pcfg, p, &hostMetadata)
 	// Consume one first time

@@ -118,7 +118,7 @@ func (c *traceToMetricConnectorNative) Capabilities() consumer.Capabilities {
 }
 
 func (c *traceToMetricConnectorNative) ConsumeTraces(_ context.Context, traces ptrace.Traces) error {
-	inputs := stats.OTLPTracesToConcentratorInputs(traces, c.tcfg, c.ctagKeys, c.peerTagKeys)
+	inputs := stats.OTLPTracesToConcentratorInputs(traces, c.tcfg, c.ctagKeys, c.peerTagKeys, nil)
 	for _, input := range inputs {
 		c.concentrator.Add(input)
 	}

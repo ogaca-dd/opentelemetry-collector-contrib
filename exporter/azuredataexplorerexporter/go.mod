@@ -6,7 +6,7 @@ require (
 	github.com/Azure/azure-kusto-go v0.16.1
 	github.com/google/uuid v1.6.0
 	github.com/json-iterator/go v1.1.12
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.117.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.0.0-20250123181613-8f73a66e0bd0
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/collector/component v0.117.1-0.20250119231113-f07ebc3afb51
 	go.opentelemetry.io/collector/component/componenttest v0.117.1-0.20250119231113-f07ebc3afb51

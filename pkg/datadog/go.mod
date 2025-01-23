@@ -3,7 +3,7 @@ module github.com/open-telemetry/opentelemetry-collector-contrib/pkg/datadog
 go 1.22.0
 
 require (
-	github.com/DataDog/datadog-agent/pkg/util/hostname/validate v0.61.0
+	github.com/DataDog/datadog-agent/pkg/util/hostname/validate v0.0.0-20250123171237-f4955dc8d294
 	github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/metrics v0.24.1-0.20250121133132-d477e9196215
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/collector/component v0.118.1-0.20250121185328-fbefb22cc2b3
@@ -21,9 +21,9 @@ require (
 )
 
 require (
-	github.com/DataDog/datadog-agent/pkg/proto v0.63.0-devel // indirect
-	github.com/DataDog/datadog-agent/pkg/util/log v0.61.0 // indirect
-	github.com/DataDog/datadog-agent/pkg/util/scrubber v0.61.0 // indirect
+	github.com/DataDog/datadog-agent/pkg/proto v0.0.0-20250123171237-f4955dc8d294 // indirect
+	github.com/DataDog/datadog-agent/pkg/util/log v0.0.0-20250123171237-f4955dc8d294 // indirect
+	github.com/DataDog/datadog-agent/pkg/util/scrubber v0.0.0-20250123171237-f4955dc8d294 // indirect
 	github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.24.1-0.20250121133132-d477e9196215 // indirect
 	github.com/DataDog/opentelemetry-mapping-go/pkg/quantile v0.24.1-0.20250121133132-d477e9196215 // indirect
 	github.com/DataDog/sketches-go v1.4.4 // indirect

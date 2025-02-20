@@ -90,6 +90,7 @@ require (
 )
 
 require (
+	github.com/DataDog/datadog-agent/pkg/config/viperconfig v0.0.0-20250217165217-34a5caf8d082
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/datadogconnector v0.120.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/datadog v0.120.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/datadog v0.120.0

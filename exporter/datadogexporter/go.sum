@@ -130,6 +130,8 @@ github.com/DataDog/datadog-agent/pkg/config/teeconfig v0.64.0-devel h1:r6hBXaNdM
 github.com/DataDog/datadog-agent/pkg/config/teeconfig v0.64.0-devel/go.mod h1:PXmsKApzRL20VQsoMwb/mPGOkeiyq/s+tdCQRZf5m2E=
 github.com/DataDog/datadog-agent/pkg/config/utils v0.62.3 h1:4b0Uqswf29hLTu94cetuT3rWC/ksIoK3YElm4u5dVKQ=
 github.com/DataDog/datadog-agent/pkg/config/utils v0.62.3/go.mod h1:/7vNPSdlokNB1yy0YGTPyv2d/yO2ZHO5voWpfgK02qI=
+github.com/DataDog/datadog-agent/pkg/config/viperconfig v0.0.0-20250217165217-34a5caf8d082 h1:4FKYtbYcyqIxfWrFVU12mHHOwC4JlZnzsmqSXZ9j5vs=
+github.com/DataDog/datadog-agent/pkg/config/viperconfig v0.0.0-20250217165217-34a5caf8d082/go.mod h1:Y65aPPDcNn9E2PrcwqEDVxK/Zfmeb21oW9cmz5KPW/w=
 github.com/DataDog/datadog-agent/pkg/logs/auditor v0.62.3 h1:VfuhBBbFpJVCtsB9PXEBAvUO3L2F8BK4BzsTrB+K4Qk=
 github.com/DataDog/datadog-agent/pkg/logs/auditor v0.62.3/go.mod h1:xWkIOjmjcofCTOZwtCAtL8tDtzVaJjMeLI0qkJtxlrA=
 github.com/DataDog/datadog-agent/pkg/logs/client v0.62.3 h1:jeoQRQYRwL0zBfF/ZziHpvwzWx2IJKIw/nXZua0chDM=

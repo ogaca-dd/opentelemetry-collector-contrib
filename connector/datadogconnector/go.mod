@@ -68,6 +68,7 @@ require (
 	github.com/DataDog/datadog-agent/pkg/config/structure v0.62.3 // indirect
 	github.com/DataDog/datadog-agent/pkg/config/teeconfig v0.64.0-devel // indirect
 	github.com/DataDog/datadog-agent/pkg/config/utils v0.62.3 // indirect
+	github.com/DataDog/datadog-agent/pkg/config/viperconfig v0.0.0-20250217165217-34a5caf8d082 // indirect
 	github.com/DataDog/datadog-agent/pkg/logs/auditor v0.62.3 // indirect
 	github.com/DataDog/datadog-agent/pkg/logs/client v0.62.3 // indirect
 	github.com/DataDog/datadog-agent/pkg/logs/diagnostic v0.62.3 // indirect
